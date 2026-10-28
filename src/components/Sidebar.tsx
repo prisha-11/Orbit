@@ -105,6 +105,7 @@ const Sidebar: React.FC = () => {
   return (
     <Box
       component="nav"
+      aria-label="Main Navigation"
       sx={{
         width: 260,
         flexShrink: 0,

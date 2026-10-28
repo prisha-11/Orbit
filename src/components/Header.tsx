@@ -118,19 +118,19 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
         {/* Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Tooltip title="Refresh Dashboard">
-            <IconButton onClick={handleRefresh} size="small" sx={{ color: 'text.secondary' }}>
+            <IconButton onClick={handleRefresh} size="small" aria-label="Refresh Dashboard" sx={{ color: 'text.secondary' }}>
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
 
           <Tooltip title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-            <IconButton onClick={onToggleDarkMode} size="small" sx={{ color: 'text.secondary' }}>
+            <IconButton onClick={onToggleDarkMode} size="small" aria-label={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'} sx={{ color: 'text.secondary' }}>
               {darkMode ? <LightModeIcon fontSize="small" sx={{ color: '#FFB74D' }} /> : <DarkModeIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
 
           <Tooltip title="Notifications">
-            <IconButton onClick={handleNotifClick} size="small" sx={{ color: 'text.secondary' }}>
+            <IconButton onClick={handleNotifClick} size="small" aria-label="Notifications" sx={{ color: 'text.secondary' }}>
               <Badge badgeContent={3} color="primary">
                 <NotificationsIcon fontSize="small" />
               </Badge>
@@ -141,6 +141,9 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
           <Tooltip title="Alex Morgan (Click to view Profile & Account)">
             <Button
               onClick={handleProfileClick}
+              aria-label="User Profile and Account Menu"
+              aria-haspopup="true"
+              aria-expanded={isMenuOpen}
               sx={{
                 display: 'flex',
                 alignItems: 'center',

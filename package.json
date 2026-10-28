@@ -7,21 +7,28 @@
     "build": "vite build",
     "preview": "vite preview",
     "backend": "node --env-file=.env.local server/proxy.mjs",
-    "start": "vite"
+    "start": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@mui/material": "^5.15.0",
-    "@mui/icons-material": "^5.15.0",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^20.11.24",
     "@vitejs/plugin-react": "^4.2.1",
+    "jsdom": "^28.1.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.11",
-    "@types/node": "^20.11.24"
+    "vitest": "^1.6.1"
   }
 }
