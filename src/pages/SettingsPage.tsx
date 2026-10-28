@@ -10,7 +10,6 @@ import {
   Stack,
   Switch,
   FormControlLabel,
-  Divider,
 } from '@mui/material';
 import HubIcon from '@mui/icons-material/Hub';
 import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';

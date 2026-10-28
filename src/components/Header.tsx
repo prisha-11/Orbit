@@ -7,7 +7,6 @@ import {
   InputBase,
   Badge,
   Tooltip,
-  Switch,
   Avatar,
   Box,
   Typography,

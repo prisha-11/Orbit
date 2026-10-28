@@ -12,7 +12,6 @@ import {
   FormControl,
   Stack,
   Button,
-  IconButton,
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,7 +20,6 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import { Opportunity } from '../types';
 import { loadOpportunities, saveOpportunities } from '../utils/localStorage';
-import sampleOpps from '../data/sampleOpportunities';
 
 const STAGES: Array<'Saved' | 'To Apply' | 'Applied' | 'Shortlisted' | 'Accepted' | 'Closed'> = [
   'Saved',
@@ -50,7 +48,7 @@ const ApplicationTracker: React.FC = () => {
     setOpps(normalized);
   }, []);
 
-  const handleStatusChange = (id: string, newStatus: any) => {
+  const handleStatusChange = (id: string, newStatus: Opportunity['status']) => {
     const updated = opps.map(o => (o.id === id ? { ...o, status: newStatus } : o));
     setOpps(updated);
     saveOpportunities(updated);
@@ -142,7 +140,8 @@ const ApplicationTracker: React.FC = () => {
                         <FormControl fullWidth size="small">
                           <Select
                             value={opp.status || stage}
-                            onChange={(e) => handleStatusChange(opp.id, e.target.value)}
+                            aria-label={`Change status for ${opp.title}`}
+                            onChange={(e) => handleStatusChange(opp.id, e.target.value as Opportunity['status'])}
                             sx={{ height: 28, fontSize: '0.72rem' }}
                           >
                             {STAGES.map(s => (

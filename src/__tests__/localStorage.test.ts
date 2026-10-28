@@ -7,7 +7,6 @@ import {
   loadProfile,
   saveProfile,
 } from '../utils/localStorage';
-import sampleOpportunities from '../data/sampleOpportunities';
 
 describe('localStorage and Data Persistence Utility', () => {
   beforeEach(() => {

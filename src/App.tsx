@@ -101,11 +101,49 @@ const App: React.FC = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
+        <a
+          href="#main-content"
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: 'auto',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            zIndex: 9999,
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.position = 'fixed';
+            e.currentTarget.style.left = '16px';
+            e.currentTarget.style.top = '16px';
+            e.currentTarget.style.width = 'auto';
+            e.currentTarget.style.height = 'auto';
+            e.currentTarget.style.padding = '8px 16px';
+            e.currentTarget.style.background = '#6A1B9A';
+            e.currentTarget.style.color = '#FFFFFF';
+            e.currentTarget.style.borderRadius = '6px';
+            e.currentTarget.style.fontWeight = 'bold';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.position = 'absolute';
+            e.currentTarget.style.left = '-9999px';
+            e.currentTarget.style.width = '1px';
+            e.currentTarget.style.height = '1px';
+          }}
+        >
+          Skip to main content
+        </a>
         <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
           <Sidebar />
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
             <Header darkMode={mode === 'dark'} onToggleDarkMode={toggleMode} />
-            <Box component="main" sx={{ p: { xs: 2, md: 3.5 }, overflowY: 'auto', flexGrow: 1, bgcolor: 'background.default' }}>
+            <Box
+              component="main"
+              id="main-content"
+              tabIndex={-1}
+              sx={{ p: { xs: 2, md: 3.5 }, overflowY: 'auto', flexGrow: 1, bgcolor: 'background.default', outline: 'none' }}
+            >
               <ErrorBoundary>
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />

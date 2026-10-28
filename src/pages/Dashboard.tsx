@@ -12,16 +12,13 @@ import {
   Tooltip,
   Paper,
   Stack,
-  Divider,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import SchoolIcon from '@mui/icons-material/School';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import HubIcon from '@mui/icons-material/Hub';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
@@ -29,7 +26,7 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 
 import { Opportunity, StudentProfile } from '../types';
 import { loadOpportunities, saveOpportunities, loadProfile, saveProfile } from '../utils/localStorage';
-import sampleOpps from '../data/sampleOpportunities';
+import { getEligibilityColor } from '../utils/formatters';
 import sampleProfile from '../data/sampleProfile';
 
 const Dashboard: React.FC = () => {
@@ -42,7 +39,6 @@ const Dashboard: React.FC = () => {
     }
     return p;
   });
-  const [filterType, setFilterType] = useState<string>('All');
 
   useEffect(() => {
     const storedOpps = loadOpportunities();
@@ -86,9 +82,6 @@ const Dashboard: React.FC = () => {
     .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
     .slice(0, 4);
 
-  // Filtered opportunities for feed
-  const displayOpps = filterType === 'All' ? opps : opps.filter(o => o.type === filterType);
-
   // Application tracker counts
   const trackerStats = {
     Saved: opps.filter(o => o.status === 'Saved' || o.verificationStatus === 'Verified').length,
@@ -96,19 +89,6 @@ const Dashboard: React.FC = () => {
     Applied: opps.filter(o => o.status === 'Applied').length,
     Shortlisted: opps.filter(o => o.status === 'Shortlisted').length,
     Accepted: opps.filter(o => o.status === 'Accepted').length,
-  };
-
-  const getEligibilityColor = (elig?: string) => {
-    switch (elig) {
-      case 'Eligible':
-        return 'success';
-      case 'Potentially Eligible':
-        return 'warning';
-      case 'Ineligible':
-        return 'error';
-      default:
-        return 'default';
-    }
   };
 
   return (
@@ -414,7 +394,7 @@ const Dashboard: React.FC = () => {
                         <Chip
                           label={o.eligibility}
                           size="small"
-                          color={getEligibilityColor(o.eligibility) as any}
+                          color={getEligibilityColor(o.eligibility)}
                           sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
                         />
                       </Stack>

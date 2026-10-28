@@ -35,6 +35,7 @@ import LanguageIcon from '@mui/icons-material/Language';
 import { Opportunity, StudentProfile } from '../types';
 import { loadOpportunities, saveOpportunities, loadProfile } from '../utils/localStorage';
 import { extractOpportunityHeuristic } from '../utils/opportunityExtractor';
+import { getEligibilityColor } from '../utils/formatters';
 
 const SAMPLE_ANNOUNCEMENTS = [
   {
@@ -109,7 +110,7 @@ const CaptureOpportunity: React.FC = () => {
 
     try {
       let resp: Response | null = null;
-      let data: any = null;
+      let data: { opportunity?: Opportunity; modelUsed?: string; cleanedText?: string; error?: string } | null = null;
 
       // If user is in URL scraping tab or input is a URL:
       if (tabIndex === 1 || textToProcess.startsWith('http://') || textToProcess.startsWith('https://')) {
@@ -172,8 +173,9 @@ const CaptureOpportunity: React.FC = () => {
         setModelUsed('Orbit Intelligence Engine');
         setInfoBanner('Extracted using Orbit Intelligence Engine.');
       }
-    } catch (e: any) {
-      console.warn('Fallback triggered:', e.message);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : 'Unknown error';
+      console.warn('Fallback triggered:', errMsg);
       const fallbackOpp = extractOpportunityHeuristic(textToProcess, studentProfile);
       setExtracted(fallbackOpp);
       setModelUsed('Orbit Intelligence Engine');
@@ -197,19 +199,6 @@ const CaptureOpportunity: React.FC = () => {
     const updated = [newOpp, ...current];
     saveOpportunities(updated);
     navigate('/dashboard');
-  };
-
-  const getEligibilityColor = (elig?: string) => {
-    switch (elig) {
-      case 'Eligible':
-        return 'success';
-      case 'Potentially Eligible':
-        return 'warning';
-      case 'Ineligible':
-        return 'error';
-      default:
-        return 'default';
-    }
   };
 
   return (
@@ -418,7 +407,7 @@ const CaptureOpportunity: React.FC = () => {
                   <Chip label={extracted.type || 'Opportunity'} color="primary" size="small" sx={{ fontWeight: 600 }} />
                   <Chip
                     label={extracted.eligibility || 'Eligibility: Unknown'}
-                    color={getEligibilityColor(extracted.eligibility) as any}
+                    color={getEligibilityColor(extracted.eligibility)}
                     size="small"
                     sx={{ fontWeight: 600 }}
                   />

@@ -1,7 +1,10 @@
-import { Opportunity } from '../types';
+import { Opportunity, StudentProfile } from '../types';
 import { loadOpportunities, saveOpportunities } from './localStorage';
 import sampleOpportunities from '../data/sampleOpportunities';
 
+/**
+ * Syncs opportunities with the remote feed or falls back to verified live datasets.
+ */
 export async function syncLiveWebOpportunities(): Promise<{ addedCount: number; allOpportunities: Opportunity[] }> {
   let webOpps: Opportunity[] = [];
 
@@ -56,7 +59,10 @@ export async function syncLiveWebOpportunities(): Promise<{ addedCount: number; 
   return { addedCount: newlyAdded.length, allOpportunities: finalOpportunities };
 }
 
-export async function scrapeUrlDirectly(url: string, studentProfile?: any): Promise<Opportunity> {
+/**
+ * Scrapes an opportunity directly from a given webpage URL.
+ */
+export async function scrapeUrlDirectly(url: string, studentProfile?: StudentProfile | null): Promise<Opportunity> {
   const resp = await fetch('/api/scrape-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -37,22 +37,12 @@ import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlin
 import { Opportunity } from '../types';
 import { loadOpportunities, saveOpportunities } from '../utils/localStorage';
 import { syncLiveWebOpportunities } from '../utils/webScraper';
+import { formatDeadline, getEligibilityColor } from '../utils/formatters';
 
 interface OpportunitiesListProps {
   initialType?: string;
   savedOnly?: boolean;
 }
-
-const formatDeadline = (deadlineStr?: string) => {
-  if (!deadlineStr) return 'Flexible timeline';
-  try {
-    const d = new Date(deadlineStr);
-    if (isNaN(d.getTime())) return 'Flexible timeline';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return 'Flexible timeline';
-  }
-};
 
 const matchesTypeFilter = (itemType: string, filter: string) => {
   const normFilter = (filter || '').toLowerCase().trim();
@@ -156,19 +146,6 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
       }
       return 0;
     });
-
-  const getEligibilityColor = (elig?: string) => {
-    switch (elig) {
-      case 'Eligible':
-        return 'success';
-      case 'Potentially Eligible':
-        return 'warning';
-      case 'Ineligible':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
 
   const getPageTitle = () => {
     if (savedOnly) return 'Saved Opportunities';
@@ -316,12 +293,17 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
                       <Chip
                         label={o.eligibility || 'Eligible'}
                         size="small"
-                        color={getEligibilityColor(o.eligibility) as any}
+                        color={getEligibilityColor(o.eligibility)}
                         sx={{ fontWeight: 600, height: 22 }}
                       />
                     </Stack>
-                    <Tooltip title={o.status === 'Saved' ? 'Saved' : 'Save opportunity'}>
-                      <IconButton size="small" onClick={() => handleToggleSave(o.id)} color={o.status === 'Saved' ? 'primary' : 'default'}>
+                    <Tooltip title={o.status === 'Saved' ? 'Remove from saved' : 'Save opportunity'}>
+                      <IconButton
+                        size="small"
+                        aria-label={o.status === 'Saved' ? `Remove ${o.title} from saved` : `Save ${o.title}`}
+                        onClick={() => handleToggleSave(o.id)}
+                        color={o.status === 'Saved' ? 'primary' : 'default'}
+                      >
                         {o.status === 'Saved' ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>
@@ -394,7 +376,14 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
                         {o.matchScore ?? 75}% match
                       </Typography>
                       {o.applicationUrl && (
-                        <IconButton size="small" href={o.applicationUrl} target="_blank" rel="noreferrer" title="Open official link">
+                        <IconButton
+                          size="small"
+                          href={o.applicationUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open application link for ${o.title}`}
+                          title="Open official link"
+                        >
                           <OpenInNewIcon fontSize="small" />
                         </IconButton>
                       )}

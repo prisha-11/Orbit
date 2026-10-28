@@ -7,12 +7,10 @@ import {
   Chip,
   Paper,
   Grid,
-  Stack,
   Button,
   Divider,
 } from '@mui/material';
 import { Link } from 'react-router-dom';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
