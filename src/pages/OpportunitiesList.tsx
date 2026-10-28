@@ -54,6 +54,25 @@ const formatDeadline = (deadlineStr?: string) => {
   }
 };
 
+const matchesTypeFilter = (itemType: string, filter: string) => {
+  const normFilter = (filter || '').toLowerCase().trim();
+  const normItem = (itemType || '').toLowerCase().trim();
+  if (normFilter === 'all' || !normFilter) return true;
+  if (normFilter === 'conference' || normFilter === 'conferences' || normFilter === 'research') {
+    return normItem.includes('conf') || normItem.includes('research') || normItem.includes('fellowship');
+  }
+  if (normFilter === 'internship' || normFilter === 'internships') {
+    return normItem.includes('intern');
+  }
+  if (normFilter === 'hackathon' || normFilter === 'hackathons') {
+    return normItem.includes('hack');
+  }
+  if (normFilter === 'networking' || normFilter === 'network') {
+    return normItem.includes('net') || normItem.includes('meet') || normItem.includes('summit') || normItem.includes('mixer');
+  }
+  return normItem === normFilter;
+};
+
 const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'All', savedOnly = false }) => {
   // Synchronous initialization ensures cards are visible immediately without any blank flicker
   const [opps, setOpps] = useState<Opportunity[]>(() => loadOpportunities());
@@ -106,13 +125,9 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
       if (!o) return false;
       if (savedOnly && o.status !== 'Saved') return false;
 
-      // Type matching: if 'Conference' is selected, include both Conference and Research
-      if (typeFilter !== 'All') {
-        if (typeFilter === 'Conference') {
-          if (o.type !== 'Conference' && o.type !== 'Research') return false;
-        } else if (o.type !== typeFilter) {
-          return false;
-        }
+      // Robust type matching (handles both Conference & Research, internships, hackathons, and networking events)
+      if (typeFilter !== 'All' && !matchesTypeFilter(o.type, typeFilter)) {
+        return false;
       }
 
       if (eligibilityFilter !== 'All' && o.eligibility !== eligibilityFilter) return false;
@@ -157,9 +172,10 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
 
   const getPageTitle = () => {
     if (savedOnly) return 'Saved Opportunities';
-    if (typeFilter === 'Conference') return 'Conferences & Research';
-    if (typeFilter === 'Networking') return 'Networking Events';
-    if (typeFilter === 'All') return 'All Opportunities';
+    const norm = (typeFilter || '').toLowerCase();
+    if (norm === 'conference' || norm === 'research') return 'Conferences & Research';
+    if (norm === 'networking') return 'Networking Events';
+    if (norm === 'all') return 'All Opportunities';
     return `${typeFilter} Opportunities`;
   };
 

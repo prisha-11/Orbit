@@ -3,6 +3,7 @@ import {
   AppBar,
   Toolbar,
   IconButton,
+  Button,
   InputBase,
   Badge,
   Tooltip,
@@ -137,8 +138,8 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
           </Tooltip>
 
           {/* User Profile Avatar */}
-          <Tooltip title="Open User Profile Menu">
-            <Box
+          <Tooltip title="Alex Morgan (Click to view Profile & Account)">
+            <Button
               onClick={handleProfileClick}
               sx={{
                 display: 'flex',
@@ -147,6 +148,8 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
                 cursor: 'pointer',
                 p: 0.5,
                 borderRadius: 2,
+                textTransform: 'none',
+                color: 'inherit',
                 transition: 'background 0.2s',
                 '&:hover': {
                   bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'),
@@ -166,14 +169,14 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
                 AM
               </Avatar>
               <Box sx={{ display: { xs: 'none', md: 'block' }, textAlign: 'left', mr: 0.5 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2, color: 'text.primary' }}>
                   Alex Morgan
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
                   B.Tech CS • 3rd Year
                 </Typography>
               </Box>
-            </Box>
+            </Button>
           </Tooltip>
         </Box>
 
