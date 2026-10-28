@@ -228,7 +228,7 @@ const Header: React.FC<HeaderProps> = ({ darkMode, onToggleDarkMode }) => {
             <ListItemIcon>
               <SettingsOutlinedIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primary="Settings & API Key" />
+            <ListItemText primary="Settings" />
           </MenuItem>
           <MenuItem onClick={handleMenuClose}>
             <ListItemIcon>

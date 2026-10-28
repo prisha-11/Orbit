@@ -33,15 +33,16 @@ const STAGES: Array<'Saved' | 'To Apply' | 'Applied' | 'Shortlisted' | 'Accepted
 ];
 
 const ApplicationTracker: React.FC = () => {
-  const [opps, setOpps] = useState<Opportunity[]>([]);
+  const [opps, setOpps] = useState<Opportunity[]>(() => {
+    const stored = loadOpportunities();
+    return stored.map(o => ({
+      ...o,
+      status: o.status || (o.eligibility === 'Eligible' ? 'To Apply' : 'Saved'),
+    }));
+  });
 
   useEffect(() => {
-    let stored = loadOpportunities();
-    if (stored.length === 0) {
-      saveOpportunities(sampleOpps);
-      stored = sampleOpps;
-    }
-    // Default opportunities without explicit status to 'Saved' or 'To Apply'
+    const stored = loadOpportunities();
     const normalized = stored.map(o => ({
       ...o,
       status: o.status || (o.eligibility === 'Eligible' ? 'To Apply' : 'Saved'),

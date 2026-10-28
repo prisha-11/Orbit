@@ -12,6 +12,7 @@ import SettingsPage from './pages/SettingsPage';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   // Light / dark mode handling with persistent local storage
@@ -105,23 +106,25 @@ const App: React.FC = () => {
           <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
             <Header darkMode={mode === 'dark'} onToggleDarkMode={toggleMode} />
             <Box component="main" sx={{ p: { xs: 2, md: 3.5 }, overflowY: 'auto', flexGrow: 1, bgcolor: 'background.default' }}>
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/capture" element={<CaptureOpportunity />} />
-                <Route path="/opportunities" element={<OpportunitiesList initialType="All" />} />
-                <Route path="/internships" element={<OpportunitiesList initialType="Internship" />} />
-                <Route path="/hackathons" element={<OpportunitiesList initialType="Hackathon" />} />
-                <Route path="/conferences" element={<OpportunitiesList initialType="Conference" />} />
-                <Route path="/networking" element={<OpportunitiesList initialType="Networking" />} />
-                <Route path="/saved" element={<OpportunitiesList savedOnly={true} />} />
-                <Route path="/tracker" element={<ApplicationTracker />} />
-                <Route path="/calendar" element={<DeadlineCalendar />} />
-                <Route path="/profile" element={<StudentProfilePage />} />
-                <Route path="/sources" element={<SettingsPage />} />
-                <Route path="/email" element={<SettingsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<Navigate replace to="/dashboard" />} />
-              </Routes>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/capture" element={<CaptureOpportunity />} />
+                  <Route path="/opportunities" element={<OpportunitiesList initialType="All" key="all" />} />
+                  <Route path="/internships" element={<OpportunitiesList initialType="Internship" key="internship" />} />
+                  <Route path="/hackathons" element={<OpportunitiesList initialType="Hackathon" key="hackathon" />} />
+                  <Route path="/conferences" element={<OpportunitiesList initialType="Conference" key="conference" />} />
+                  <Route path="/networking" element={<OpportunitiesList initialType="Networking" key="networking" />} />
+                  <Route path="/saved" element={<OpportunitiesList savedOnly={true} key="saved" />} />
+                  <Route path="/tracker" element={<ApplicationTracker />} />
+                  <Route path="/calendar" element={<DeadlineCalendar />} />
+                  <Route path="/profile" element={<StudentProfilePage />} />
+                  <Route path="/sources" element={<SettingsPage />} />
+                  <Route path="/email" element={<SettingsPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate replace to="/dashboard" />} />
+                </Routes>
+              </ErrorBoundary>
             </Box>
           </Box>
         </Box>

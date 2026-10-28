@@ -17,6 +17,10 @@ import {
   Paper,
   IconButton,
   Tooltip,
+  CircularProgress,
+  Snackbar,
+  Alert,
+  Divider,
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -25,31 +29,66 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AddIcon from '@mui/icons-material/Add';
+import SyncIcon from '@mui/icons-material/Sync';
+import LanguageIcon from '@mui/icons-material/Language';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
 
 import { Opportunity } from '../types';
 import { loadOpportunities, saveOpportunities } from '../utils/localStorage';
-import sampleOpps from '../data/sampleOpportunities';
+import { syncLiveWebOpportunities } from '../utils/webScraper';
 
 interface OpportunitiesListProps {
   initialType?: string;
   savedOnly?: boolean;
 }
 
+const formatDeadline = (deadlineStr?: string) => {
+  if (!deadlineStr) return 'Flexible timeline';
+  try {
+    const d = new Date(deadlineStr);
+    if (isNaN(d.getTime())) return 'Flexible timeline';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'Flexible timeline';
+  }
+};
+
 const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'All', savedOnly = false }) => {
-  const [opps, setOpps] = useState<Opportunity[]>([]);
+  // Synchronous initialization ensures cards are visible immediately without any blank flicker
+  const [opps, setOpps] = useState<Opportunity[]>(() => loadOpportunities());
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState(initialType);
   const [eligibilityFilter, setEligibilityFilter] = useState('All');
   const [sortBy, setSortBy] = useState('deadline');
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
 
   useEffect(() => {
-    let stored = loadOpportunities();
-    if (stored.length === 0) {
-      saveOpportunities(sampleOpps);
-      stored = sampleOpps;
-    }
+    setTypeFilter(initialType);
+  }, [initialType]);
+
+  const refreshOpportunities = () => {
+    const stored = loadOpportunities();
     setOpps(stored);
+  };
+
+  useEffect(() => {
+    refreshOpportunities();
   }, []);
+
+  const handleSyncWeb = async () => {
+    setSyncing(true);
+    try {
+      await syncLiveWebOpportunities();
+      refreshOpportunities();
+      setSyncSuccess(true);
+    } catch (err) {
+      console.error('Web sync failed:', err);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleToggleSave = (id: string) => {
     const updated = opps.map(o => {
@@ -62,37 +101,66 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
     saveOpportunities(updated);
   };
 
-  const filteredOpps = opps.filter(o => {
-    if (savedOnly && o.status !== 'Saved') return false;
-    if (typeFilter !== 'All' && o.type !== typeFilter) return false;
-    if (eligibilityFilter !== 'All' && o.eligibility !== eligibilityFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const matchTitle = o.title.toLowerCase().includes(q);
-      const matchOrg = o.organization.toLowerCase().includes(q);
-      const matchSkills = (o.skillsRequired || []).some(s => s.toLowerCase().includes(q));
-      if (!matchTitle && !matchOrg && !matchSkills) return false;
-    }
-    return true;
-  }).sort((a, b) => {
-    if (sortBy === 'deadline') {
-      const dA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
-      const dB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
-      return dA - dB;
-    }
-    if (sortBy === 'match') {
-      return (b.matchScore ?? 0) - (a.matchScore ?? 0);
-    }
-    return 0;
-  });
+  const filteredOpps = (opps || [])
+    .filter(o => {
+      if (!o) return false;
+      if (savedOnly && o.status !== 'Saved') return false;
+
+      // Type matching: if 'Conference' is selected, include both Conference and Research
+      if (typeFilter !== 'All') {
+        if (typeFilter === 'Conference') {
+          if (o.type !== 'Conference' && o.type !== 'Research') return false;
+        } else if (o.type !== typeFilter) {
+          return false;
+        }
+      }
+
+      if (eligibilityFilter !== 'All' && o.eligibility !== eligibilityFilter) return false;
+
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchTitle = (o.title || '').toLowerCase().includes(q);
+        const matchOrg = (o.organization || '').toLowerCase().includes(q);
+        const skillsList = Array.isArray(o.skillsRequired) ? o.skillsRequired : [];
+        const matchSkills = skillsList.some(s => typeof s === 'string' && s.toLowerCase().includes(q));
+        if (!matchTitle && !matchOrg && !matchSkills) return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'deadline') {
+        const dA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+        const dB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+        const safeA = isNaN(dA) ? Infinity : dA;
+        const safeB = isNaN(dB) ? Infinity : dB;
+        return safeA - safeB;
+      }
+      if (sortBy === 'match') {
+        return (b.matchScore ?? 0) - (a.matchScore ?? 0);
+      }
+      return 0;
+    });
 
   const getEligibilityColor = (elig?: string) => {
     switch (elig) {
-      case 'Eligible': return 'success';
-      case 'Potentially Eligible': return 'warning';
-      case 'Ineligible': return 'error';
-      default: return 'default';
+      case 'Eligible':
+        return 'success';
+      case 'Potentially Eligible':
+        return 'warning';
+      case 'Ineligible':
+        return 'error';
+      default:
+        return 'default';
     }
+  };
+
+  const getPageTitle = () => {
+    if (savedOnly) return 'Saved Opportunities';
+    if (typeFilter === 'Conference') return 'Conferences & Research';
+    if (typeFilter === 'Networking') return 'Networking Events';
+    if (typeFilter === 'All') return 'All Opportunities';
+    return `${typeFilter} Opportunities`;
   };
 
   return (
@@ -101,26 +169,46 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800 }}>
-            {savedOnly ? 'Saved Opportunities' : `${typeFilter === 'All' ? 'All' : typeFilter} Opportunities`}
+            {getPageTitle()}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Showing {filteredOpps.length} opportunities matched to your profile
+            Showing {filteredOpps.length} verified opportunities matched to your student profile
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          component={Link}
-          to="/capture"
-          startIcon={<AddIcon />}
-          sx={{
-            background: 'linear-gradient(135deg, #6A1B9A 0%, #9575CD 100%)',
-            color: '#fff',
-            borderRadius: 2,
-            fontWeight: 600,
-          }}
-        >
-          Capture New Announcement
-        </Button>
+
+        <Stack direction="row" spacing={1.5} flexWrap="wrap">
+          <Button
+            variant="outlined"
+            onClick={handleSyncWeb}
+            disabled={syncing}
+            startIcon={syncing ? <CircularProgress size={18} color="inherit" /> : <SyncIcon />}
+            sx={{
+              borderRadius: 2,
+              fontWeight: 600,
+              textTransform: 'none',
+              borderColor: 'primary.main',
+              color: 'primary.main',
+            }}
+          >
+            {syncing ? 'Scraping Web Feeds...' : 'Sync Live Opportunities'}
+          </Button>
+
+          <Button
+            variant="contained"
+            component={Link}
+            to="/capture"
+            startIcon={<AddIcon />}
+            sx={{
+              background: 'linear-gradient(135deg, #6A1B9A 0%, #9575CD 100%)',
+              color: '#fff',
+              borderRadius: 2,
+              fontWeight: 600,
+              boxShadow: '0 4px 14px rgba(106, 27, 154, 0.35)',
+            }}
+          >
+            Capture Announcement
+          </Button>
+        </Stack>
       </Box>
 
       {/* Filter and Search Bar */}
@@ -150,11 +238,10 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
                   <InputLabel>Type</InputLabel>
                   <Select value={typeFilter} label="Type" onChange={e => setTypeFilter(e.target.value)}>
                     <MenuItem value="All">All Types</MenuItem>
-                    <MenuItem value="Internship">Internship</MenuItem>
-                    <MenuItem value="Hackathon">Hackathon</MenuItem>
-                    <MenuItem value="Conference">Conference</MenuItem>
-                    <MenuItem value="Research">Research</MenuItem>
-                    <MenuItem value="Networking">Networking</MenuItem>
+                    <MenuItem value="Internship">Internships</MenuItem>
+                    <MenuItem value="Hackathon">Hackathons</MenuItem>
+                    <MenuItem value="Conference">Conferences & Research</MenuItem>
+                    <MenuItem value="Networking">Networking Events</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -188,113 +275,164 @@ const OpportunitiesList: React.FC<OpportunitiesListProps> = ({ initialType = 'Al
 
       {/* Opportunities Grid */}
       <Grid container spacing={2.5}>
-        {filteredOpps.map(o => (
-          <Grid item xs={12} md={6} lg={4} key={o.id}>
-            <Card
-              sx={{
-                borderRadius: 3,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 24px rgba(76, 78, 100, 0.12)',
-                },
-              }}
-            >
-              <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                  <Stack direction="row" spacing={0.8}>
-                    <Chip label={o.type} size="small" color="primary" sx={{ fontWeight: 600, height: 22 }} />
-                    <Chip
-                      label={o.eligibility}
-                      size="small"
-                      color={getEligibilityColor(o.eligibility) as any}
-                      sx={{ fontWeight: 600, height: 22 }}
-                    />
-                  </Stack>
-                  <Tooltip title={o.status === 'Saved' ? 'Saved' : 'Save opportunity'}>
-                    <IconButton size="small" onClick={() => handleToggleSave(o.id)} color={o.status === 'Saved' ? 'primary' : 'default'}>
-                      {o.status === 'Saved' ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
-                    </IconButton>
-                  </Tooltip>
-                </Box>
+        {filteredOpps.map(o => {
+          const skillsList = Array.isArray(o.skillsRequired) ? o.skillsRequired : [];
 
-                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.3, mb: 0.5 }}>
-                  {o.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  {o.organization} • {o.source}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: 'text.secondary',
-                    mb: 2,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {o.description}
-                </Typography>
-
-                {/* Skills tags */}
-                <Box sx={{ mb: 2, flexGrow: 1 }}>
-                  <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
-                    {(o.skillsRequired || []).slice(0, 4).map((skill, i) => (
-                      <Chip key={i} label={skill} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.68rem' }} />
-                    ))}
-                  </Stack>
-                </Box>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* Bottom Card Footer */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CalendarMonthIcon fontSize="inherit" />
-                      {o.deadline ? new Date(o.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No deadline'}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                      {o.matchScore ?? 75}% match
-                    </Typography>
-                    {o.applicationUrl && (
-                      <IconButton size="small" href={o.applicationUrl} target="_blank" rel="noreferrer">
-                        <OpenInNewIcon fontSize="small" />
+          return (
+            <Grid item xs={12} md={6} lg={4} key={o.id}>
+              <Card
+                sx={{
+                  borderRadius: 3,
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 24px rgba(76, 78, 100, 0.12)',
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Stack direction="row" spacing={0.8}>
+                      <Chip label={o.type} size="small" color="primary" sx={{ fontWeight: 600, height: 22 }} />
+                      <Chip
+                        label={o.eligibility || 'Eligible'}
+                        size="small"
+                        color={getEligibilityColor(o.eligibility) as any}
+                        sx={{ fontWeight: 600, height: 22 }}
+                      />
+                    </Stack>
+                    <Tooltip title={o.status === 'Saved' ? 'Saved' : 'Save opportunity'}>
+                      <IconButton size="small" onClick={() => handleToggleSave(o.id)} color={o.status === 'Saved' ? 'primary' : 'default'}>
+                        {o.status === 'Saved' ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
                       </IconButton>
-                    )}
+                    </Tooltip>
                   </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+
+                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.3, mb: 0.5 }}>
+                    {o.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    {o.organization} • {o.source || 'Google Search'}
+                  </Typography>
+
+                  {/* Location & Compensation badges */}
+                  <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                    {o.location && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, color: 'text.secondary', fontSize: '0.78rem' }}>
+                        <LocationOnOutlinedIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {o.location}
+                        </Typography>
+                      </Box>
+                    )}
+                    {o.compensationOrFees && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, color: 'success.main', fontSize: '0.78rem' }}>
+                        <MonetizationOnOutlinedIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'success.main' }}>
+                          {o.compensationOrFees}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                      mb: 2,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {o.description}
+                  </Typography>
+
+                  {/* Skills tags */}
+                  <Box sx={{ mb: 2, flexGrow: 1 }}>
+                    <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
+                      {skillsList.slice(0, 4).map((skill, i) => (
+                        <Chip key={i} label={skill} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.68rem' }} />
+                      ))}
+                    </Stack>
+                  </Box>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  {/* Bottom Card Footer */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <CalendarMonthIcon fontSize="inherit" />
+                        {formatDeadline(o.deadline)}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        {o.matchScore ?? 75}% match
+                      </Typography>
+                      {o.applicationUrl && (
+                        <IconButton size="small" href={o.applicationUrl} target="_blank" rel="noreferrer" title="Open official link">
+                          <OpenInNewIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          );
+        })}
 
         {filteredOpps.length === 0 && (
           <Grid item xs={12}>
             <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
+              <LanguageIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1.5 }} />
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                No opportunities match your filter
+                No opportunities currently listed in this category
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Try adjusting your search criteria or capture new announcements using GPT-4o.
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}>
+                Click below to scrape and sync the latest verified opportunities from Unstop, Devpost, LinkedIn, and conference portals.
               </Typography>
-              <Button variant="contained" component={Link} to="/capture" sx={{ borderRadius: 2 }}>
-                Capture Announcement
-              </Button>
+              <Stack direction="row" spacing={2} justifyContent="center">
+                <Button
+                  variant="contained"
+                  onClick={handleSyncWeb}
+                  disabled={syncing}
+                  startIcon={syncing ? <CircularProgress size={18} color="inherit" /> : <SyncIcon />}
+                  sx={{
+                    background: 'linear-gradient(135deg, #6A1B9A 0%, #9575CD 100%)',
+                    borderRadius: 2,
+                    fontWeight: 600,
+                  }}
+                >
+                  {syncing ? 'Scraping Web...' : 'Sync Live Opportunities Now'}
+                </Button>
+                <Button variant="outlined" component={Link} to="/capture" sx={{ borderRadius: 2 }}>
+                  Capture Announcement
+                </Button>
+              </Stack>
             </Paper>
           </Grid>
         )}
       </Grid>
+
+      <Snackbar
+        open={syncSuccess}
+        autoHideDuration={4000}
+        onClose={() => setSyncSuccess(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity="success" sx={{ borderRadius: 2 }} onClose={() => setSyncSuccess(false)}>
+          Live opportunities scraped & synced successfully from web sources!
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

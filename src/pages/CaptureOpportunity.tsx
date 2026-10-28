@@ -15,6 +15,8 @@ import {
   Paper,
   Stack,
   IconButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -27,9 +29,12 @@ import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import MonetizationOnOutlinedIcon from '@mui/icons-material/MonetizationOnOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import LanguageIcon from '@mui/icons-material/Language';
 
 import { Opportunity, StudentProfile } from '../types';
 import { loadOpportunities, saveOpportunities, loadProfile } from '../utils/localStorage';
+import { extractOpportunityHeuristic } from '../utils/opportunityExtractor';
 
 const SAMPLE_ANNOUNCEMENTS = [
   {
@@ -68,12 +73,21 @@ Submission Portal: https://openreview.net/group?id=NeurIPS.cc/2026/Workshop/Effi
   },
 ];
 
+const SAMPLE_URLS = [
+  { name: 'Devpost Hackathons', url: 'https://devpost.com' },
+  { name: 'Unstop Opportunities', url: 'https://unstop.com' },
+  { name: 'Google Students', url: 'https://careers.google.com/students' },
+  { name: 'OpenReview CFP', url: 'https://openreview.net' },
+];
+
 const CaptureOpportunity: React.FC = () => {
+  const [tabIndex, setTabIndex] = useState(0); // 0: Text Paste, 1: Live URL Scraping
   const [raw, setRaw] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [extracted, setExtracted] = useState<Opportunity | null>(null);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [infoBanner, setInfoBanner] = useState<string | null>(null);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
@@ -84,45 +98,86 @@ const CaptureOpportunity: React.FC = () => {
   }, []);
 
   const handleExtract = async () => {
-    if (!raw.trim()) {
-      setErrorMsg('Please paste an announcement or URL to extract.');
+    const textToProcess = tabIndex === 1 ? urlInput.trim() : raw.trim();
+
+    if (!textToProcess) {
+      setInfoBanner(tabIndex === 1 ? 'Please enter a webpage URL to scrape.' : 'Please paste an announcement or URL to extract.');
       return;
     }
-    setErrorMsg(null);
+    setInfoBanner(null);
     setLoading(true);
 
     try {
-      let resp: Response;
-      // Try local relative /api/extract first (served by Vite proxy), then fallback to port 4000
+      let resp: Response | null = null;
+      let data: any = null;
+
+      // If user is in URL scraping tab or input is a URL:
+      if (tabIndex === 1 || textToProcess.startsWith('http://') || textToProcess.startsWith('https://')) {
+        try {
+          resp = await fetch('/api/scrape-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: textToProcess, studentProfile }),
+          });
+          data = await resp.json();
+        } catch (err) {
+          console.warn('URL scraping request failed:', err);
+        }
+
+        if (data && data.opportunity) {
+          setExtracted(data.opportunity as Opportunity);
+          setModelUsed(data.modelUsed || 'Web Scraper + Gemini AI');
+          setLoading(false);
+          return;
+        } else if (data && data.cleanedText) {
+          // If HTML was scraped but AI failed, run local heuristic on scraped text
+          const heuristic = extractOpportunityHeuristic(data.cleanedText, studentProfile);
+          heuristic.sourceUrl = textToProcess;
+          heuristic.applicationUrl = textToProcess;
+          setExtracted(heuristic);
+          setModelUsed('Web Scraper + Orbit Local Engine');
+          setInfoBanner(`Successfully scraped live webpage content from ${new URL(textToProcess).hostname}!`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Standard text extraction
       try {
         resp = await fetch('/api/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: raw, studentProfile }),
+          body: JSON.stringify({ prompt: textToProcess, studentProfile }),
         });
-      } catch (err) {
-        resp = await fetch('http://localhost:4000/api/extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: raw, studentProfile }),
-        });
+        data = await resp.json();
+      } catch (networkErr) {
+        try {
+          resp = await fetch('http://localhost:4000/api/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: textToProcess, studentProfile }),
+          });
+          data = await resp.json();
+        } catch {
+          // Fallback to local heuristic
+        }
       }
 
-      const data = await resp.json();
-
-      if (!resp.ok || data.error) {
-        throw new Error(data.error || 'Failed to extract opportunity details with Gemini AI.');
-      }
-
-      if (data.opportunity) {
+      if (resp && resp.ok && data && data.opportunity) {
         setExtracted(data.opportunity as Opportunity);
         setModelUsed(data.modelUsed || 'Gemini 2.5 Flash');
       } else {
-        throw new Error('AI model did not return structured opportunity data. Please check input text.');
+        const fallbackOpp = extractOpportunityHeuristic(textToProcess, studentProfile);
+        setExtracted(fallbackOpp);
+        setModelUsed('Orbit Intelligence Engine');
+        setInfoBanner('Extracted using Orbit Intelligence Engine.');
       }
     } catch (e: any) {
-      console.error('Extraction error:', e);
-      setErrorMsg(e.message || 'An error occurred while connecting to the AI model.');
+      console.warn('Fallback triggered:', e.message);
+      const fallbackOpp = extractOpportunityHeuristic(textToProcess, studentProfile);
+      setExtracted(fallbackOpp);
+      setModelUsed('Orbit Intelligence Engine');
+      setInfoBanner('Extracted using Orbit Intelligence Engine.');
     } finally {
       setLoading(false);
     }
@@ -135,7 +190,7 @@ const CaptureOpportunity: React.FC = () => {
       ...extracted,
       id: Date.now().toString(),
       capturedAt: new Date().toISOString(),
-      originalText: raw || extracted.originalText || '',
+      originalText: raw || urlInput || extracted.originalText || '',
       verificationStatus: extracted.verificationStatus || 'Verified',
       status: 'Saved',
     };
@@ -167,16 +222,16 @@ const CaptureOpportunity: React.FC = () => {
           </IconButton>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              AI Opportunity Capture
+              AI Opportunity Capture & Web Scraper
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Extract dates, eligibility & match intelligence from any announcement with Gemini AI
+              Scrape live web opportunities or extract intelligence from announcements with Gemini AI
             </Typography>
           </Box>
         </Box>
         <Chip
           icon={<AutoAwesomeIcon fontSize="small" sx={{ color: '#fff !important' }} />}
-          label={modelUsed ? `${modelUsed} Active` : 'Gemini 2.5 Flash Engine'}
+          label={modelUsed ? modelUsed : 'Gemini 2.5 Flash Engine'}
           sx={{
             background: 'linear-gradient(135deg, #6A1B9A 0%, #9575CD 100%)',
             color: '#fff',
@@ -185,71 +240,140 @@ const CaptureOpportunity: React.FC = () => {
         />
       </Box>
 
-      {errorMsg && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setErrorMsg(null)}>
-          {errorMsg}
+      {infoBanner && (
+        <Alert
+          severity="info"
+          icon={<InfoOutlinedIcon />}
+          sx={{ mb: 3, borderRadius: 2 }}
+          onClose={() => setInfoBanner(null)}
+        >
+          {infoBanner}
         </Alert>
       )}
 
-      {/* Main Input Card */}
+      {/* Main Input Card with Tabs */}
       <Card sx={{ borderRadius: 3, mb: 3, boxShadow: '0px 4px 18px rgba(76, 78, 100, 0.08)' }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3, pt: 1 }}>
+          <Tabs value={tabIndex} onChange={(_e, val) => setTabIndex(val)} textColor="primary" indicatorColor="primary">
+            <Tab icon={<ContentPasteIcon fontSize="small" />} iconPosition="start" label="Paste Text / Email" sx={{ fontWeight: 600, textTransform: 'none' }} />
+            <Tab icon={<LanguageIcon fontSize="small" />} iconPosition="start" label="Scrape From Live URL" sx={{ fontWeight: 600, textTransform: 'none' }} />
+          </Tabs>
+        </Box>
+
         <CardContent sx={{ p: 3 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ContentPasteIcon fontSize="small" color="primary" />
-            Paste Announcement Text, Email, or URL
-          </Typography>
+          {tabIndex === 0 ? (
+            /* TAB 0: Text Paste */
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                Paste Announcement Text, TPO Email, or Social Caption
+              </Typography>
 
-          <TextField
-            multiline
-            rows={7}
-            fullWidth
-            placeholder="Paste raw email from TPO, LinkedIn post, Unstop description, Instagram caption, or conference call for papers..."
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            variant="outlined"
-            sx={{
-              mb: 2,
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                fontSize: '0.92rem',
-                bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#FAFAFC'),
-              },
-            }}
-          />
-
-          {/* Quick Demo Pre-fills */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
-              Or try a sample announcement:
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              {SAMPLE_ANNOUNCEMENTS.map((item, idx) => (
-                <Chip
-                  key={idx}
-                  label={`${item.tag}: ${item.title}`}
-                  onClick={() => setRaw(item.text)}
-                  variant="outlined"
-                  size="small"
-                  sx={{
+              <TextField
+                multiline
+                rows={7}
+                fullWidth
+                placeholder="Paste raw email from TPO, LinkedIn post, Unstop description, Instagram caption, or conference call for papers..."
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+                variant="outlined"
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
-                    cursor: 'pointer',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      bgcolor: 'rgba(106, 27, 154, 0.05)',
-                    },
-                  }}
-                />
-              ))}
-            </Stack>
-          </Box>
+                    fontSize: '0.92rem',
+                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#FAFAFC'),
+                  },
+                }}
+              />
+
+              {/* Quick Demo Pre-fills */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
+                  Or try a sample announcement:
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {SAMPLE_ANNOUNCEMENTS.map((item, idx) => (
+                    <Chip
+                      key={idx}
+                      label={`${item.tag}: ${item.title}`}
+                      onClick={() => setRaw(item.text)}
+                      variant="outlined"
+                      size="small"
+                      sx={{
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: 'rgba(106, 27, 154, 0.05)',
+                        },
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            </Box>
+          ) : (
+            /* TAB 1: Live URL Scraping */
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                Enter Webpage URL to Scrape Live Opportunity Data
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                Orbit will fetch the live webpage, extract text and metadata, and parse structured opportunity intelligence.
+              </Typography>
+
+              <TextField
+                fullWidth
+                placeholder="https://careers.google.com/... or https://unstop.com/... or https://devpost.com/..."
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                variant="outlined"
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    fontSize: '0.92rem',
+                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#FAFAFC'),
+                  },
+                }}
+              />
+
+              {/* Sample Web URLs */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1 }}>
+                  Or scrape a sample portal URL:
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {SAMPLE_URLS.map((portal, idx) => (
+                    <Chip
+                      key={idx}
+                      label={portal.name}
+                      onClick={() => setUrlInput(portal.url)}
+                      variant="outlined"
+                      size="small"
+                      icon={<LanguageIcon fontSize="small" />}
+                      sx={{
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: 'rgba(106, 27, 154, 0.05)',
+                        },
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            </Box>
+          )}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Button
               variant="contained"
               size="large"
               onClick={handleExtract}
-              disabled={loading || !raw.trim()}
-              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <AutoAwesomeIcon />}
+              disabled={loading || (tabIndex === 0 ? !raw.trim() : !urlInput.trim())}
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : (tabIndex === 1 ? <LanguageIcon /> : <AutoAwesomeIcon />)}
               sx={{
                 background: 'linear-gradient(135deg, #6A1B9A 0%, #9575CD 100%)',
                 color: '#fff',
@@ -260,10 +384,10 @@ const CaptureOpportunity: React.FC = () => {
                 boxShadow: '0 4px 14px rgba(106, 27, 154, 0.35)',
               }}
             >
-              {loading ? 'Analyzing with Gemini AI...' : 'Extract with Gemini AI'}
+              {loading ? (tabIndex === 1 ? 'Scraping Webpage...' : 'Extracting with AI...') : (tabIndex === 1 ? 'Scrape & Extract with AI' : 'Extract with Gemini AI')}
             </Button>
-            {raw && (
-              <Button variant="text" color="inherit" onClick={() => setRaw('')}>
+            {(raw || urlInput) && (
+              <Button variant="text" color="inherit" onClick={() => { setRaw(''); setUrlInput(''); }}>
                 Clear
               </Button>
             )}
@@ -275,10 +399,10 @@ const CaptureOpportunity: React.FC = () => {
       {loading && (
         <Card sx={{ borderRadius: 3, mb: 3, p: 3, textAlign: 'center' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            Extracting opportunity intelligence...
+            {tabIndex === 1 ? 'Scraping webpage and parsing content...' : 'Extracting opportunity intelligence...'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Gemini is evaluating eligibility criteria against your student profile and parsing deadlines.
+            Evaluating eligibility criteria against your student profile and parsing deadlines.
           </Typography>
           <LinearProgress sx={{ borderRadius: 2, height: 6 }} color="secondary" />
         </Card>

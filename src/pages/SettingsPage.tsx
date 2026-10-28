@@ -4,20 +4,16 @@ import {
   Card,
   CardContent,
   Typography,
-  TextField,
-  Grid,
   Button,
-  Chip,
   Alert,
-  Divider,
   Paper,
   Stack,
   Switch,
   FormControlLabel,
+  Divider,
 } from '@mui/material';
 import HubIcon from '@mui/icons-material/Hub';
-import KeyIcon from '@mui/icons-material/Key';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { saveOpportunities, saveProfile } from '../utils/localStorage';
@@ -26,6 +22,9 @@ import sampleProfile from '../data/sampleProfile';
 
 const SettingsPage: React.FC = () => {
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [deadlineReminders, setDeadlineReminders] = useState(true);
+  const [eligibilityAlerts, setEligibilityAlerts] = useState(true);
+  const [autoSaveCapture, setAutoSaveCapture] = useState(false);
 
   const handleResetData = () => {
     saveOpportunities(sampleOpportunities);
@@ -40,10 +39,10 @@ const SettingsPage: React.FC = () => {
     <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 800 }}>
-          System Settings & Integrations
+          Settings
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage AI extraction keys, connected data sources, and application storage
+          Manage your opportunity channels, notification preferences, and application data
         </Typography>
       </Box>
 
@@ -53,44 +52,10 @@ const SettingsPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* AI Extraction Engine Status */}
-      <Card sx={{ borderRadius: 3, mb: 3 }}>
-        <CardContent sx={{ p: 3.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <KeyIcon color="primary" />
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                AI Model & API Configuration
-              </Typography>
-            </Box>
-            <Chip label="Gemini 2.5 Flash Active" color="success" size="small" sx={{ fontWeight: 700 }} />
-          </Box>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Your Google Gemini API Key and OpenAI fallback keys are securely loaded from <code>.env.local</code> on the backend proxy server to prevent exposing credentials to client-side bundles.
-          </Typography>
-
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#F9F9FB', mb: 2 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
-              Active Configuration:
-            </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-              Primary Engine: Google Gemini (gemini-2.5-flash / gemini-1.5-flash JSON mode)
-            </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-              Fallback Engine: OpenAI GPT-4o
-            </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-              Key Status: GEMINI_API_KEY active in .env.local
-            </Typography>
-          </Paper>
-        </CardContent>
-      </Card>
-
       {/* Connected Opportunity Sources */}
       <Card sx={{ borderRadius: 3, mb: 3 }}>
         <CardContent sx={{ p: 3.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
             <HubIcon color="primary" />
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               Connected Opportunity Channels
@@ -103,10 +68,10 @@ const SettingsPage: React.FC = () => {
 
           <Stack spacing={2}>
             {[
-              { name: 'College TPO Email Feed', desc: 'Auto-ingest emails forwarded from placement coordinators', active: true },
-              { name: 'Unstop Opportunity Webhook', desc: 'Real-time hackathon & competition announcements', active: true },
-              { name: 'LinkedIn Posts & Articles', desc: 'Sync recruiter posts and hiring announcements', active: true },
-              { name: 'Internshala Sync', desc: 'Early bird summer internship listings', active: true },
+              { name: 'College TPO Email Feed', desc: 'Auto-ingest announcements forwarded from placement coordinators', active: true },
+              { name: 'Unstop Opportunity Webhook', desc: 'Real-time hackathon & national competition announcements', active: true },
+              { name: 'LinkedIn Posts & Articles', desc: 'Sync recruiter posts and verified hiring announcements', active: true },
+              { name: 'Internshala Sync', desc: 'Curated summer internship and pre-placement listings', active: true },
               { name: 'Instagram & Social Announcements', desc: 'Direct paste capture support', active: false },
             ].map((channel, i) => (
               <Paper key={i} variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -119,11 +84,65 @@ const SettingsPage: React.FC = () => {
                   </Typography>
                 </Box>
                 <FormControlLabel
-                  control={<Switch checked={channel.active} color="primary" />}
+                  control={<Switch defaultChecked={channel.active} color="primary" />}
                   label={channel.active ? 'Active' : 'Manual'}
                 />
               </Paper>
             ))}
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* Notification & Intelligence Preferences */}
+      <Card sx={{ borderRadius: 3, mb: 3 }}>
+        <CardContent sx={{ p: 3.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+            <NotificationsActiveOutlinedIcon color="primary" />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Opportunity Intelligence Preferences
+            </Typography>
+          </Box>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Configure deadline urgency threshold reminders and match scoring alerts.
+          </Typography>
+
+          <Stack spacing={2}>
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Urgent Deadline Reminders
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Flag opportunities with deadlines approaching within 7 days
+                </Typography>
+              </Box>
+              <Switch checked={deadlineReminders} onChange={(e) => setDeadlineReminders(e.target.checked)} color="primary" />
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Eligibility Verification Alerts
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Highlight eligibility changes when degree or year criteria match your profile
+                </Typography>
+              </Box>
+              <Switch checked={eligibilityAlerts} onChange={(e) => setEligibilityAlerts(e.target.checked)} color="primary" />
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Auto-Save Captured Opportunities
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Automatically persist newly extracted announcements to the dashboard feed
+                </Typography>
+              </Box>
+              <Switch checked={autoSaveCapture} onChange={(e) => setAutoSaveCapture(e.target.checked)} color="primary" />
+            </Paper>
           </Stack>
         </CardContent>
       </Card>
@@ -135,7 +154,7 @@ const SettingsPage: React.FC = () => {
             Data Persistence & Reset
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Orbit persists all captured announcements, student profiles, and application statuses in your browser's localStorage.
+            Orbit persists all captured announcements, student profile details, and application statuses in your browser's localStorage.
           </Typography>
 
           <Button

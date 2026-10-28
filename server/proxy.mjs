@@ -96,6 +96,29 @@ ${announcementText}
   return { systemPrompt, userPrompt };
 }
 
+function cleanHtmlToText(html) {
+  let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  text = text.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+  text = text.replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '');
+  text = text.replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '');
+
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const metaDescMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+
+  const header = [
+    titleMatch ? `Title: ${titleMatch[1].trim()}` : '',
+    metaDescMatch ? `Summary: ${metaDescMatch[1].trim()}` : '',
+  ].filter(Boolean).join('\n');
+
+  text = text.replace(/<[^>]+>/g, ' ');
+  text = text.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return `${header}\n\n${text.slice(0, 4000)}`;
+}
+
 async function extractWithGemini(apiKey, systemPrompt, userPrompt) {
   const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
   let lastError = '';
@@ -103,12 +126,18 @@ async function extractWithGemini(apiKey, systemPrompt, userPrompt) {
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      };
+
+      if (!apiKey.startsWith('AIzaSy')) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
       const resp = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
+        headers,
         body: JSON.stringify({
           system_instruction: {
             parts: [{ text: systemPrompt }],
@@ -141,36 +170,7 @@ async function extractWithGemini(apiKey, systemPrompt, userPrompt) {
       lastError = err.message;
     }
   }
-  throw new Error(`Gemini API error: ${lastError || 'No response candidates'}`);
-}
-
-async function extractWithOpenAI(apiKey, systemPrompt, userPrompt) {
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-    }),
-  });
-
-  const data = await resp.json();
-  if (!resp.ok) {
-    throw new Error(data?.error?.message || 'OpenAI API request failed');
-  }
-
-  const content = data?.choices?.[0]?.message?.content || '';
-  const clean = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-  const opportunity = JSON.parse(clean);
-  return { opportunity, modelUsed: 'GPT-4o', raw: data };
+  throw new Error(`Gemini API error: ${lastError || 'Invalid API key or model unavailable'}`);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -190,6 +190,60 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ status: 'ok', time: new Date().toISOString() }));
   }
 
+  // Live URL Scraper
+  if (url.pathname === '/api/scrape-url' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { url: targetUrl, studentProfile } = JSON.parse(body || '{}');
+        if (!targetUrl) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify({ error: 'URL is required' }));
+        }
+
+        const pageResp = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+        });
+
+        if (!pageResp.ok) {
+          throw new Error(`Failed to fetch webpage: HTTP ${pageResp.status}`);
+        }
+
+        const html = await pageResp.text();
+        const cleanedText = cleanHtmlToText(html);
+
+        const geminiKey = process.env.GEMINI_API_KEY || GEMINI_API_KEY;
+        let result = null;
+        if (geminiKey) {
+          const { systemPrompt, userPrompt } = buildExtractionPrompt(cleanedText, studentProfile);
+          try {
+            result = await extractWithGemini(geminiKey, systemPrompt, userPrompt);
+          } catch (e) {
+            console.warn('Scrape extraction failed:', e.message);
+          }
+        }
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({
+          opportunity: result?.opportunity || null,
+          cleanedText,
+          url: targetUrl,
+        }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: err.message || 'Web scraping failed' }));
+      }
+    });
+    return;
+  }
+
+  // Opportunity Extraction
   if ((url.pathname === '/api/extract' || url.pathname === '/api/gpt4o') && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -205,30 +259,11 @@ const server = http.createServer(async (req, res) => {
         }
 
         const geminiKey = process.env.GEMINI_API_KEY || GEMINI_API_KEY;
-        const openAiKey = process.env.OPENAI_API_KEY || OPENAI_API_KEY;
-
-        if (!geminiKey && !openAiKey) {
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          return res.end(JSON.stringify({ error: 'Neither GEMINI_API_KEY nor OPENAI_API_KEY configured in .env.local' }));
-        }
-
         const { systemPrompt, userPrompt } = buildExtractionPrompt(prompt, studentProfile);
 
         let result = null;
-        if (geminiKey && !geminiKey.includes('YOUR_GEMINI_KEY')) {
-          try {
-            result = await extractWithGemini(geminiKey, systemPrompt, userPrompt);
-          } catch (geminiErr) {
-            console.warn('Gemini extraction failed, attempting OpenAI fallback:', geminiErr.message);
-            if (openAiKey && !openAiKey.includes('YOUR_OPENAI_KEY')) {
-              result = await extractWithOpenAI(openAiKey, systemPrompt, userPrompt);
-            } else {
-              throw geminiErr;
-            }
-          }
-        } else if (openAiKey) {
-          result = await extractWithOpenAI(openAiKey, systemPrompt, userPrompt);
+        if (geminiKey) {
+          result = await extractWithGemini(geminiKey, systemPrompt, userPrompt);
         }
 
         if (result && result.opportunity && !result.opportunity.originalText) {
@@ -239,7 +274,6 @@ const server = http.createServer(async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify(result));
       } catch (err) {
-        console.error('Proxy error:', err);
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify({ error: err.message || 'Internal proxy error' }));
@@ -254,5 +288,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Orbit AI Intelligence Proxy running on http://localhost:${PORT}`);
+  console.log(`Orbit AI & Scraper Proxy running on http://localhost:${PORT}`);
 });

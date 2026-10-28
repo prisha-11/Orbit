@@ -33,24 +33,22 @@ import sampleOpps from '../data/sampleOpportunities';
 import sampleProfile from '../data/sampleProfile';
 
 const Dashboard: React.FC = () => {
-  const [opps, setOpps] = useState<Opportunity[]>([]);
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [opps, setOpps] = useState<Opportunity[]>(() => loadOpportunities());
+  const [profile, setProfile] = useState<StudentProfile | null>(() => {
+    const p = loadProfile();
+    if (!p) {
+      saveProfile(sampleProfile);
+      return sampleProfile;
+    }
+    return p;
+  });
   const [filterType, setFilterType] = useState<string>('All');
 
-  // Initialize storage with sample data if empty
   useEffect(() => {
     const storedOpps = loadOpportunities();
-    if (storedOpps.length === 0) {
-      saveOpportunities(sampleOpps);
-      setOpps(sampleOpps);
-    } else {
-      setOpps(storedOpps);
-    }
+    setOpps(storedOpps);
     const storedProfile = loadProfile();
-    if (!storedProfile) {
-      saveProfile(sampleProfile);
-      setProfile(sampleProfile);
-    } else {
+    if (storedProfile) {
       setProfile(storedProfile);
     }
   }, []);
